@@ -38,10 +38,20 @@ test('login with Google redirects to attendance page', async ({ page, context, l
       if (GOOGLE_ACCOUNT_PASSWORD) {
         await passwordInput.fill(GOOGLE_ACCOUNT_PASSWORD);
         await targetPage.locator('#passwordNext button').click();
+
+        // Wait to see if 2-Step Verification screen appears
+        try {
+          // Both "2-Step Verification" and "Xác minh 2 bước" (Vietnamese) might appear
+          const twoFactorPrompt = targetPage.locator('text=/2-Step Verification|Xác minh 2 bước/i');
+          await twoFactorPrompt.first().waitFor({ state: 'visible', timeout: 10000 });
+          console.log('📱 Vui lòng kiểm tra điện thoại để xác thực 2 bước (2FA)...');
+        } catch (e) {
+          // 2FA screen might not appear or it redirected quickly
+        }
       } else {
         console.warn('⚠️ Google requires a password but GOOGLE_ACCOUNT_PASSWORD is not provided or empty in your variables!');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.log('Password input did not appear or skipped:', e.message);
     }
   } else if (await accountOption.isVisible()) {
@@ -49,5 +59,6 @@ test('login with Google redirects to attendance page', async ({ page, context, l
     await accountOption.first().click();
   }
 
-  await expect(page).toHaveURL(/\/attendance(?:\/)?(?:\?.*)?$/, { timeout: 60000 });
+  // Increase timeout to 120 seconds to give enough time for manual 2FA phone confirmation
+  await expect(page).toHaveURL(/\/attendance(?:\/)?(?:\?.*)?$/, { timeout: 120000 });
 });
