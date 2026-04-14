@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 import { test } from './playwright-fixtures';
 
 const GOOGLE_ACCOUNT_EMAIL = process.env.TEST_USER_EMAIL || 'linh.ptm@haposoft.com';
@@ -7,9 +7,22 @@ const GOOGLE_ACCOUNT_PASSWORD = process.env.TEST_USER_PASSWORD || '';
 test('login with Google redirects to attendance page', async ({ page, context, loginPage }) => {
   await loginPage.goto();
 
-  const popupPromise = context.waitForEvent('page', { timeout: 5000 }).catch(() => null);
+  // We use Promise.race to instantly detect if it's a popup OR a same-page redirect without waiting a full 5 seconds.
+  const popupPromise = context.waitForEvent('page').catch(() => null);
   await loginPage.loginWithGoogle();
-  const googlePopup = await popupPromise;
+  
+  let googlePopup: Page | null = null;
+  try {
+    const result = await Promise.race([
+      popupPromise,
+      page.waitForURL(/accounts\.google/, { timeout: 10000 }).then(() => 'REDIRECT')
+    ]);
+    if (result !== 'REDIRECT') {
+      googlePopup = result as Page | null;
+    }
+  } catch {
+    // Ignore wait timeout
+  }
 
   const targetPage = googlePopup || page;
 
@@ -21,7 +34,7 @@ test('login with Google redirects to attendance page', async ({ page, context, l
   try {
     // Wait up to 15s to cover slow networks and navigations
     await emailInput.or(accountOption.first()).waitFor({ state: 'visible', timeout: 15000 });
-  } catch (e) {
+  } catch {
     console.log('Timeout waiting for Google login elements');
   }
 
@@ -39,20 +52,18 @@ test('login with Google redirects to attendance page', async ({ page, context, l
         await passwordInput.fill(GOOGLE_ACCOUNT_PASSWORD);
         await targetPage.locator('#passwordNext button').click();
 
-        // Wait to see if 2-Step Verification screen appears
-        try {
-          // Both "2-Step Verification" and "Xác minh 2 bước" (Vietnamese) might appear
-          const twoFactorPrompt = targetPage.locator('text=/2-Step Verification|Xác minh 2 bước/i');
-          await twoFactorPrompt.first().waitFor({ state: 'visible', timeout: 10000 });
-          console.log('📱 Vui lòng kiểm tra điện thoại để xác thực 2 bước (2FA)...');
-        } catch (e) {
-          // 2FA screen might not appear or it redirected quickly
-        }
+        // 🚀 ĐOẠN NÀY ĐÃ ĐƯỢC TỐI ƯU: Không dùng `await` để tránh bị block 10 giây nếu 2FA KHÔNG xuất hiện.
+        // Tiến trình theo dõi 2FA sẽ chạy ngầm, nếu thấy 2FA thì in console, nếu nhảy trang luôn thì catch im lặng.
+        targetPage.locator('text=/2-Step Verification|Xác minh 2 bước/i').first()
+          .waitFor({ state: 'visible', timeout: 10000 })
+          .then(() => console.log('📱 Vui lòng kiểm tra điện thoại để xác thực 2 bước (2FA)...'))
+          .catch(() => {});
       } else {
         console.warn('⚠️ Google requires a password but GOOGLE_ACCOUNT_PASSWORD is not provided or empty in your variables!');
       }
-    } catch (e: any) {
-      console.log('Password input did not appear or skipped:', e.message);
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.log('Password input did not appear or skipped:', errorMsg);
     }
   } else if (await accountOption.isVisible()) {
     // Click on existing account option
