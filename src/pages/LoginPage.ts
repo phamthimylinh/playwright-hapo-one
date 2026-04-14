@@ -5,6 +5,7 @@ export class LoginPage extends BasePage {
   readonly emailInput = 'input[name="email"]';
   readonly passwordInput = 'input[name="password"]';
   readonly submitButton = 'button[type="submit"]';
+  readonly googleSignInButtonText = 'Sign in with Google';
 
   constructor(page: Page) {
     super(page);
@@ -21,5 +22,9 @@ export class LoginPage extends BasePage {
       this.page.waitForNavigation(),
       this.page.click(this.submitButton),
     ]);
+  }
+
+  async loginWithGoogle() {
+    await this.page.getByText(this.googleSignInButtonText, { exact: true }).click();
   }
 }
