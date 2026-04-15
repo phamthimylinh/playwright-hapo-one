@@ -5,12 +5,15 @@ const GOOGLE_ACCOUNT_EMAIL = process.env.TEST_USER_EMAIL || 'linh.ptm@haposoft.c
 const GOOGLE_ACCOUNT_PASSWORD = process.env.TEST_USER_PASSWORD || '';
 
 test('login with Google redirects to attendance page', async ({ page, context, loginPage }) => {
+  // Increase test timeout to 5 minutes to allow for manual 2FA confirmation
+  test.setTimeout(300000);
+
   await loginPage.goto();
 
   // We use Promise.race to instantly detect if it's a popup OR a same-page redirect without waiting a full 5 seconds.
   const popupPromise = context.waitForEvent('page').catch(() => null);
   await loginPage.loginWithGoogle();
-  
+
   let googlePopup: Page | null = null;
   try {
     const result = await Promise.race([
@@ -57,7 +60,7 @@ test('login with Google redirects to attendance page', async ({ page, context, l
         targetPage.locator('text=/2-Step Verification|Xác minh 2 bước/i').first()
           .waitFor({ state: 'visible', timeout: 10000 })
           .then(() => console.log('📱 Vui lòng kiểm tra điện thoại để xác thực 2 bước (2FA)...'))
-          .catch(() => {});
+          .catch(() => { });
       } else {
         console.warn('⚠️ Google requires a password but GOOGLE_ACCOUNT_PASSWORD is not provided or empty in your variables!');
       }
@@ -70,6 +73,6 @@ test('login with Google redirects to attendance page', async ({ page, context, l
     await accountOption.first().click();
   }
 
-  // Increase timeout to 120 seconds to give enough time for manual 2FA phone confirmation
-  await expect(page).toHaveURL(/\/attendance(?:\/)?(?:\?.*)?$/, { timeout: 120000 });
-});
+  // Increase timeout to 240 seconds (4 minutes) to give enough time for manual 2FA phone confirmation
+  await expect(page).toHaveURL(/\/attendance(?:\/)?(?:\?.*)?$/, { timeout: 240000 });
+})
